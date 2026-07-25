@@ -1,13 +1,16 @@
 package main
 
 import (
+	"context"
 	"database/sql"
+	"encoding/json"
 	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	_ "github.com/lib/pq"
+	"github.com/segmentio/kafka-go"
 )
 
 var db *sql.DB
@@ -18,6 +21,12 @@ type Turno struct {
 	IDMedico   string `json:"id_medico" binding:"required"`
 	FechaHora  string `json:"fecha_hora" binding:"required"`
 	Estado     string `json:"estado,omitempty"`
+}
+
+type ConsultaCompletadaEvent struct {
+	IDConsulta string `json:"idConsulta"`
+	IDTurno    string `json:"idTurno"`
+	Estado     string `json:"estado"`
 }
 
 func main() {
@@ -35,6 +44,9 @@ func main() {
 	}
 	log.Println("Conectado a PostgreSQL correctamente")
 
+	// Iniciar el consumidor de Kafka en segundo plano
+	go consumirEventosConsulta()
+
 	router := gin.Default()
 
 	router.GET("/health", func(c *gin.Context) {
@@ -47,6 +59,54 @@ func main() {
 
 	log.Println("MS Turnos escuchando en el puerto 8081...")
 	router.Run(":8081")
+}
+
+// consumirEventosConsulta se suscribe al topic de Kafka "consulta-completada"
+// y actualiza el estado del turno correspondiente cada vez que llega un evento.
+// Al ser un consumer group, si MS Turnos está caído los mensajes quedan
+// retenidos en Kafka y se procesan en cuanto el servicio se reconecta.
+func consumirEventosConsulta() {
+	reader := kafka.NewReader(kafka.ReaderConfig{
+		Brokers: []string{"localhost:9092"},
+		Topic:   "consulta-completada",
+		GroupID: "ms-turnos-group",
+	})
+	defer reader.Close()
+
+	log.Println("Consumidor de Kafka escuchando el topic 'consulta-completada'...")
+
+	for {
+		m, err := reader.ReadMessage(context.Background())
+		if err != nil {
+			log.Println("Error leyendo mensaje de Kafka:", err)
+			time.Sleep(2 * time.Second)
+			continue
+		}
+
+		var evento ConsultaCompletadaEvent
+		if err := json.Unmarshal(m.Value, &evento); err != nil {
+			log.Println("Error parseando evento de Kafka:", err)
+			continue
+		}
+
+		if err := actualizarEstado(evento.IDTurno, evento.Estado); err != nil {
+			log.Println("Error actualizando turno desde evento Kafka:", err)
+		} else {
+			log.Println("Turno actualizado via Kafka -> id:", evento.IDTurno, "estado:", evento.Estado)
+		}
+	}
+}
+
+// actualizarEstado contiene la lógica compartida para cambiar el estado de un
+// turno, usada tanto por el endpoint HTTP como por el consumidor de Kafka.
+func actualizarEstado(idTurno string, estado string) error {
+	_, err := db.Exec(`
+		UPDATE turnos
+		SET estado = $1, actualizado_en = now()
+		WHERE id_turno = $2`,
+		estado, idTurno,
+	)
+	return err
 }
 
 func listarTurnos(c *gin.Context) {
@@ -114,20 +174,8 @@ func actualizarEstadoTurno(c *gin.Context) {
 		return
 	}
 
-	result, err := db.Exec(`
-		UPDATE turnos
-		SET estado = $1, actualizado_en = now()
-		WHERE id_turno = $2`,
-		body.Estado, idTurno,
-	)
-	if err != nil {
+	if err := actualizarEstado(idTurno, body.Estado); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	filas, _ := result.RowsAffected()
-	if filas == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "turno no encontrado"})
 		return
 	}
 

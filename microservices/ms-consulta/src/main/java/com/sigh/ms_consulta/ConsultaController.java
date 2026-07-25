@@ -2,6 +2,7 @@ package com.sigh.ms_consulta;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
+import org.springframework.kafka.core.KafkaTemplate;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
@@ -16,12 +17,14 @@ public class ConsultaController {
 
     private final ConsultaRepository consultaRepository;
     private final RestTemplate restTemplate = new RestTemplate();
+    private final KafkaTemplate<String, String> kafkaTemplate;
 
     @Value("${ms.turnos.url}")
     private String msTurnosUrl;
 
-    public ConsultaController(ConsultaRepository consultaRepository) {
+    public ConsultaController(ConsultaRepository consultaRepository, KafkaTemplate<String, String> kafkaTemplate) {
         this.consultaRepository = consultaRepository;
+        this.kafkaTemplate = kafkaTemplate;
     }
 
     @GetMapping
@@ -33,15 +36,26 @@ public class ConsultaController {
     public Consulta crear(@RequestBody Consulta nuevaConsulta) {
         Consulta guardada = consultaRepository.save(nuevaConsulta);
 
-        // Comunicación remota real con MS Turnos: al registrar la consulta,
-        // se notifica al microservicio de Turnos para marcarlo como "atendido".
+        // Comunicación remota síncrona con MS Turnos (HTTP)
         try {
             String url = msTurnosUrl + "/api/v1/turnos/" + guardada.getIdTurno() + "/estado";
             Map<String, String> body = Map.of("estado", "atendido");
             restTemplate.put(url, body);
-            System.out.println("MS Turnos notificado: turno " + guardada.getIdTurno() + " marcado como atendido");
+            System.out.println("MS Turnos notificado por HTTP: turno " + guardada.getIdTurno() + " marcado como atendido");
         } catch (RestClientException e) {
-            System.out.println("Aviso: no se pudo notificar a MS Turnos - " + e.getMessage());
+            System.out.println("Aviso: no se pudo notificar a MS Turnos por HTTP - " + e.getMessage());
+        }
+
+        // Publicación asíncrona del evento ConsultaCompletadaEvent en Kafka
+        try {
+            String payload = String.format(
+                    "{\"idConsulta\":\"%s\",\"idTurno\":\"%s\",\"estado\":\"atendido\"}",
+                    guardada.getIdConsulta(), guardada.getIdTurno()
+            );
+            kafkaTemplate.send("consulta-completada", guardada.getIdTurno().toString(), payload);
+            System.out.println("Evento ConsultaCompletadaEvent publicado en Kafka para turno " + guardada.getIdTurno());
+        } catch (Exception e) {
+            System.out.println("Aviso: no se pudo publicar evento en Kafka - " + e.getMessage());
         }
 
         return guardada;
