@@ -1,0 +1,29 @@
+﻿services:
+  postgres:
+    image: postgres:17
+    container_name: postgres-hospital
+    restart: always
+    environment:
+      POSTGRES_DB: hospitaldb
+      POSTGRES_USER: hospital
+      POSTGRES_PASSWORD: hospital123
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  mongodb:
+    image: mongo:8
+    container_name: mongodb-hospital
+    restart: always
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin123
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+
+volumes:
+  postgres_data:
+  mongodb_data:
