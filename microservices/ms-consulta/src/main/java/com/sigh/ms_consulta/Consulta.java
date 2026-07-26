@@ -1,6 +1,8 @@
 package com.sigh.ms_consulta;
 
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import java.time.LocalDateTime;
 import java.util.UUID;
 
@@ -13,15 +15,19 @@ public class Consulta {
     @Column(name = "id_consulta")
     private UUID idConsulta;
 
+    @NotNull(message = "idTurno es obligatorio")
     @Column(name = "id_turno", nullable = false)
     private UUID idTurno;
 
+    @NotNull(message = "idPaciente es obligatorio")
     @Column(name = "id_paciente", nullable = false)
     private UUID idPaciente;
 
+    @NotNull(message = "idMedico es obligatorio")
     @Column(name = "id_medico", nullable = false)
     private UUID idMedico;
 
+    @NotBlank(message = "motivo es obligatorio")
     @Column(name = "motivo", nullable = false)
     private String motivo;
 
