@@ -35,6 +35,16 @@ $turnos = $turnosResp['ok'] ? ($turnosResp['data'] ?? []) : [];
 $pdo = getPDO();
 $pacientes = $pdo->query("SELECT id_paciente, nombre, apellido_paterno FROM pacientes ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
 $medicos = $pdo->query("SELECT id_medico, nombre, especialidad FROM medicos WHERE activo = TRUE ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
+
+// Mapas id -> nombre legible, para mostrar nombres en vez de UUIDs en la tabla
+$nombresPacientes = [];
+foreach ($pacientes as $p) {
+    $nombresPacientes[$p['id_paciente']] = $p['nombre'] . ' ' . $p['apellido_paterno'];
+}
+$nombresMedicos = [];
+foreach ($medicos as $m) {
+    $nombresMedicos[$m['id_medico']] = $m['nombre'] . ' — ' . $m['especialidad'];
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -110,8 +120,8 @@ $medicos = $pdo->query("SELECT id_medico, nombre, especialidad FROM medicos WHER
                         <?php foreach ($turnos as $t): ?>
                             <tr>
                                 <td><?= htmlspecialchars(substr($t['id_turno'] ?? '', 0, 8)) ?>…</td>
-                                <td><?= htmlspecialchars(substr($t['id_paciente'] ?? '', 0, 8)) ?>…</td>
-                                <td><?= htmlspecialchars(substr($t['id_medico'] ?? '', 0, 8)) ?>…</td>
+                                <td><?= htmlspecialchars($nombresPacientes[$t['id_paciente'] ?? ''] ?? (substr($t['id_paciente'] ?? '', 0, 8) . '…')) ?></td>
+                                <td><?= htmlspecialchars($nombresMedicos[$t['id_medico'] ?? ''] ?? (substr($t['id_medico'] ?? '', 0, 8) . '…')) ?></td>
                                 <td><?= htmlspecialchars($t['fecha_hora'] ?? '') ?></td>
                                 <td><span class="estado-badge estado-<?= htmlspecialchars($t['estado'] ?? '') ?>"><?= htmlspecialchars($t['estado'] ?? '') ?></span></td>
                             </tr>

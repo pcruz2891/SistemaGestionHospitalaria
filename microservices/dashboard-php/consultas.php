@@ -41,6 +41,12 @@ $turnos = $turnosResp['ok'] ? ($turnosResp['data'] ?? []) : [];
 $pdo = getPDO();
 $pacientes = $pdo->query("SELECT id_paciente, nombre, apellido_paterno FROM pacientes ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
 $medicos = $pdo->query("SELECT id_medico, nombre, especialidad FROM medicos WHERE activo = TRUE ORDER BY nombre")->fetchAll(PDO::FETCH_ASSOC);
+
+// Mapa id_turno -> etiqueta legible (fecha y estado), para mostrar en vez del UUID crudo
+$etiquetasTurno = [];
+foreach ($turnos as $t) {
+    $etiquetasTurno[$t['id_turno']] = ($t['fecha_hora'] ?? '') . ' (' . ($t['estado'] ?? '') . ')';
+}
 ?>
 <!DOCTYPE html>
 <html lang="es">
@@ -126,7 +132,7 @@ $medicos = $pdo->query("SELECT id_medico, nombre, especialidad FROM medicos WHER
                         <?php foreach ($consultas as $c): ?>
                             <tr>
                                 <td><?= htmlspecialchars(substr($c['idConsulta'] ?? '', 0, 8)) ?>…</td>
-                                <td><?= htmlspecialchars(substr($c['idTurno'] ?? '', 0, 8)) ?>…</td>
+                                <td><?= htmlspecialchars($etiquetasTurno[$c['idTurno'] ?? ''] ?? (substr($c['idTurno'] ?? '', 0, 8) . '…')) ?></td>
                                 <td><?= htmlspecialchars($c['motivo'] ?? '') ?></td>
                                 <td><span class="estado-badge estado-<?= htmlspecialchars($c['estado'] ?? '') ?>"><?= htmlspecialchars($c['estado'] ?? '') ?></span></td>
                                 <td><?= htmlspecialchars($c['fechaAtencion'] ?? '') ?></td>
