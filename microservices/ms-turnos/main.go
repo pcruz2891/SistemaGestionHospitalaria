@@ -4,8 +4,10 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -14,6 +16,16 @@ import (
 )
 
 var db *sql.DB
+
+// getEnv devuelve el valor de una variable de entorno o un valor por defecto
+// si no está definida. Permite que el servicio corra igual de forma nativa
+// (localhost) o dentro de Docker (apuntando a los nombres de los contenedores).
+func getEnv(clave, porDefecto string) string {
+	if valor := os.Getenv(clave); valor != "" {
+		return valor
+	}
+	return porDefecto
+}
 
 type Turno struct {
 	IDTurno    string `json:"id_turno,omitempty"`
@@ -30,7 +42,16 @@ type ConsultaCompletadaEvent struct {
 }
 
 func main() {
-	connStr := "host=localhost port=5432 user=hospital password=hospital123 dbname=hospitaldb sslmode=disable"
+	dbHost := getEnv("DB_HOST", "localhost")
+	dbPort := getEnv("DB_PORT", "5432")
+	dbUser := getEnv("DB_USER", "hospital")
+	dbPass := getEnv("DB_PASSWORD", "hospital123")
+	dbName := getEnv("DB_NAME", "hospitaldb")
+
+	connStr := fmt.Sprintf(
+		"host=%s port=%s user=%s password=%s dbname=%s sslmode=disable",
+		dbHost, dbPort, dbUser, dbPass, dbName,
+	)
 
 	var err error
 	db, err = sql.Open("postgres", connStr)
@@ -66,8 +87,9 @@ func main() {
 // Al ser un consumer group, si MS Turnos está caído los mensajes quedan
 // retenidos en Kafka y se procesan en cuanto el servicio se reconecta.
 func consumirEventosConsulta() {
+	kafkaBroker := getEnv("KAFKA_BROKER", "localhost:9092")
 	reader := kafka.NewReader(kafka.ReaderConfig{
-		Brokers: []string{"localhost:9092"},
+		Brokers: []string{kafkaBroker},
 		Topic:   "consulta-completada",
 		GroupID: "ms-turnos-group",
 	})

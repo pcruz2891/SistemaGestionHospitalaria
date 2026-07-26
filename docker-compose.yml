@@ -32,7 +32,7 @@
       KAFKA_NODE_ID: 0
       KAFKA_PROCESS_ROLES: broker,controller
       KAFKA_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-hospital:9092
       KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_CONTROLLER_QUORUM_VOTERS: 0@kafka-hospital:9093
       KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT
@@ -41,6 +41,42 @@
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: "1"
       KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: "1"
+  ms-turnos:
+    build:
+      context: ./microservices/ms-turnos
+    container_name: ms-turnos
+    restart: always
+    depends_on:
+      - postgres
+      - kafka
+    ports:
+      - "8081:8081"
+    environment:
+      DB_HOST: postgres-hospital
+      DB_PORT: "5432"
+      DB_USER: hospital
+      DB_PASSWORD: hospital123
+      DB_NAME: hospitaldb
+      KAFKA_BROKER: kafka-hospital:9092
+  ms-consulta:
+    build:
+      context: ./microservices/ms-consulta
+    container_name: ms-consulta
+    restart: always
+    depends_on:
+      - postgres
+      - kafka
+      - ms-turnos
+    ports:
+      - "8082:8082"
+    environment:
+      DB_HOST: postgres-hospital
+      DB_PORT: "5432"
+      DB_USER: hospital
+      DB_PASSWORD: hospital123
+      DB_NAME: hospitaldb
+      KAFKA_BROKER: kafka-hospital:9092
+      MS_TURNOS_URL: http://ms-turnos:8081
 volumes:
   postgres_data:
   mongodb_data:
